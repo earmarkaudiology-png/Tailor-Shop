@@ -1,0 +1,1388 @@
+command is !tailor-menu
+var TailorShop = TailorShop || (function () {
+    'use strict';
+
+    var SCRIPT = 'TailorShop';
+    var VERSION = '0.1.0';
+    var STATE = 'TAILOR_SHOP_API';
+
+    var currentWhisperTarget = 'gm';
+
+
+    var CONFIG = {
+        coinAttrs: { gp: 'gp', sp: 'sp', cp: 'cp' },
+        reactionAttr: 'reactionbonus',
+        helperMonthlyGp: {
+            blacksmith: 30,
+            leatherworker: 3,
+            woodworker: 2
+        },
+        race: {
+            human: { efficiency: 1 },
+            dwarf: { efficiency: 2 },
+            elf: { efficiency: 1 },
+            gnome: { efficiency: 2 },
+            halfling: { efficiency: 1 }
+        },
+        repairNotRepairablePct: 20,
+        repairCostMinPct: 10,
+        repairCostMaxPct: 90,
+        colors: {
+            panelBg: '#12131f',
+            panelBorder: '#6e5c8a',
+            text: '#f7f1ff',
+            subtext: '#d9cde8',
+            primaryBg: '#355d9c',
+            primaryBorder: '#9db5e3',
+            reportBg: '#6c4a7d',
+            reportBorder: '#c6a6dc',
+            warnBg: '#8a5a2b',
+            warnBorder: '#ddb48d',
+            dangerBg: '#8b1d1d',
+            dangerBorder: '#d96a6a',
+            gmBg: '#3f3170',
+            gmBorder: '#a18dd9',
+            buttonBg: '#1c1d30',
+            buttonBorder: '#b8a4d6',
+            buttonText: '#fff0d1'
+        },
+        randomNames: [
+            'Alda', 'Beren', 'Corin', 'Dessa', 'Eldrin', 'Fara', 'Garrik', 'Hesta', 'Iven', 'Jora',
+            'Kell', 'Lysa', 'Marek', 'Nora', 'Orin', 'Pella', 'Quin', 'Ressa', 'Sella', 'Tarin',
+            'Ulla', 'Vern', 'Wessa', 'Yorra', 'Zerin', 'Brom', 'Dain', 'Milo', 'Tessa', 'Halwen'
+        ],
+        haggleFailComments: [
+            'Good cloth, thread, cutting, and fitting all cost coin.',
+            'You are pressing too hard on honest needlework.',
+            'Fine stitching is not bargain work.',
+            'That is already a fair tailoring price.',
+            'The cloth does not cut and hem itself.',
+            'A proper fit takes time and skill.',
+            'If you want it cheap and fast, you want the impossible.',
+            'You are asking me to cut below fair value.',
+            'Good work deserves proper payment.',
+            'Pay for quality or buy rough homespun elsewhere.'
+        ],
+        settlementSkill: {
+            village: { poor: 45, fair: 35, good: 15, excellent: 5, master: 0 },
+            town: { poor: 15, fair: 40, good: 30, excellent: 12, master: 3 },
+            city: { poor: 5, fair: 20, good: 40, excellent: 25, master: 10 },
+            metropolis: { poor: 0, fair: 10, good: 35, excellent: 35, master: 20 }
+        },
+        products: {
+            paddedarmor: { label: 'Padded Armor', quantityBase: 1, baseDays: 30, basePriceGp: 4, skillMin: 0, category: 'armor', support: [], cloth: true, cloth: true, notes: 'Core-book tailor work.', repairable: true },
+            cap: { label: 'Cap', quantityBase: 1, baseDays: 1, basePriceGp: 0.05, skillMin: 0, category: 'clothing', support: [], cloth: true, cloth: true, notes: 'PHB clothing item.', repairable: true },
+            hat: { label: 'Hat', quantityBase: 1, baseDays: 1, basePriceGp: 0.35, skillMin: 0, category: 'clothing', support: [], cloth: true, cloth: true, notes: 'Tailor or hatter work.', repairable: true },
+            cloak: { label: 'Cloak', quantityBase: 1, baseDays: 1, basePriceGp: 0.25, skillMin: 0, category: 'clothing', support: [], cloth: true, cloth: true, notes: 'About 1 day per plain cloak.', repairable: true },
+            robe: { label: 'Robe', quantityBase: 1, baseDays: 2, basePriceGp: 0.30, skillMin: 0, category: 'clothing', support: [], cloth: true, cloth: true, notes: 'PHB clothing item.', repairable: true },
+            bootssoftlow: { label: 'Boots, Low, Soft', quantityBase: 1, baseDays: 2, basePriceGp: 0.8, skillMin: 0, category: 'footwear', support: [], cloth: true, cloth: true, notes: 'Soft boots only; hard boots belong to the Leatherworker.', repairable: true },
+            bootssofthigh: { label: 'Boots, High, Soft', quantityBase: 1, baseDays: 3, basePriceGp: 1, skillMin: 0, category: 'footwear', support: [], cloth: true, cloth: true, notes: 'Soft boots only; hard boots belong to the Leatherworker.', repairable: true },
+            beltcloth: { label: 'Belt, Cloth', quantityBase: 1, baseDays: 1, basePriceGp: 0.15, skillMin: 0, category: 'clothing', support: [], cloth: true, cloth: true, notes: 'Cloth or woven belt. Leather belts belong to the Leatherworker.', repairable: true },
+            girdlenormal: { label: 'Girdle, Normal', quantityBase: 1, baseDays: 2, basePriceGp: 0.5, skillMin: 0, category: 'clothing', support: [], cloth: true, cloth: true, notes: 'PHB clothing item.', repairable: true },
+            girdlebroad: { label: 'Girdle, Broad', quantityBase: 1, baseDays: 3, basePriceGp: 2, skillMin: 1, category: 'clothing', support: [], cloth: true, cloth: true, notes: 'PHB clothing item.', repairable: true },
+            tunic: { label: 'Tunic', quantityBase: 1, baseDays: 2, basePriceGp: 0.4, skillMin: 0, category: 'clothing', support: [], cloth: true, cloth: true, notes: 'DMG wardrobe item.', repairable: true },
+            trousers: { label: 'Trousers', quantityBase: 1, baseDays: 2, basePriceGp: 0.4, skillMin: 0, category: 'clothing', support: [], cloth: true, cloth: true, notes: 'DMG wardrobe item.', repairable: true },
+            stockings: { label: 'Stockings', quantityBase: 1, baseDays: 1, basePriceGp: 0.2, skillMin: 0, category: 'clothing', support: [], cloth: true, cloth: true, notes: 'DMG wardrobe item.', repairable: true },
+            hood: { label: 'Hood', quantityBase: 1, baseDays: 1, basePriceGp: 0.15, skillMin: 0, category: 'clothing', support: [], cloth: true, cloth: true, notes: 'DMG wardrobe item.', repairable: true },
+            surcoat: { label: 'Surcoat', quantityBase: 1, baseDays: 2, basePriceGp: 0.5, skillMin: 0, category: 'clothing', support: [], cloth: true, cloth: true, notes: 'DMG wardrobe item.', repairable: true },
+            scarf: { label: 'Scarf', quantityBase: 1, baseDays: 1, basePriceGp: 0.1, skillMin: 0, category: 'clothing', support: [], cloth: true, cloth: true, notes: 'DMG wardrobe item.', repairable: true },
+            glovescloth: { label: 'Gloves, Cloth', quantityBase: 1, baseDays: 1, basePriceGp: 0.15, skillMin: 0, category: 'clothing', support: [], cloth: true, cloth: true, notes: 'Soft glove work only.', repairable: true },
+            bagcloth: { label: 'Bag, Cloth', quantityBase: 1, baseDays: 1, basePriceGp: 0.1, skillMin: 0, category: 'gear', support: [], cloth: true, cloth: true, notes: 'Tailors make bags. Leather bags belong to the Leatherworker.', repairable: true },
+            pouchcloth: { label: 'Pouch, Cloth', quantityBase: 1, baseDays: 1, basePriceGp: 0.1, skillMin: 0, category: 'gear', support: [], cloth: true, cloth: true, notes: 'Cloth pouch only; leather pouches belong to the Leatherworker.', repairable: true },
+            shieldcover: { label: 'Shield Cover', quantityBase: 1, baseDays: 1, basePriceGp: 0.2, skillMin: 0, category: 'gear', support: [], cloth: true, cloth: true, notes: 'Tailor work from the DMG hireling description.', repairable: true },
+            fineclothes: { label: 'Fine Clothes', quantityBase: 1, baseDays: 4, basePriceGp: 2, skillMin: 2, category: 'fine', support: [], cloth: true, cloth: true, notes: 'Requires a good tailor or better.', repairable: true },
+            finecloak: { label: 'Fine Cloak', quantityBase: 1, baseDays: 3, basePriceGp: 1.25, skillMin: 2, category: 'fine', support: [], cloth: true, cloth: true, notes: 'Requires a good tailor or better.', repairable: true },
+            finerobe: { label: 'Fine Robe', quantityBase: 1, baseDays: 4, basePriceGp: 1.5, skillMin: 2, category: 'fine', support: [], cloth: true, cloth: true, notes: 'Requires a good tailor or better.', repairable: true }
+        },
+        referrals: [
+            'Hard boots, backpacks, waterskins, belts in leather, and tack belong to the Leatherworker.',
+            'Metal shields and metal armor belong to the Blacksmith.',
+            'Wooden shield bodies belong to the Woodworker.'
+        ]
+    };
+
+
+    _.each(CONFIG.products, function (product, key) {
+        product.key = key;
+    });
+
+    function stateInit() {
+        if (!state[STATE]) {
+            state[STATE] = {
+                version: VERSION,
+                nextTailorId: 1,
+                nextQuoteId: 1,
+                nextJobId: 1,
+                nextInspectionId: 1,
+                tailors: [],
+                quotes: [],
+                jobs: [],
+                inspections: []
+            };
+        }
+        state[STATE].version = VERSION;
+        state[STATE].nextTailorId = state[STATE].nextTailorId || 1;
+        state[STATE].nextQuoteId = state[STATE].nextQuoteId || 1;
+        state[STATE].nextJobId = state[STATE].nextJobId || 1;
+        state[STATE].nextInspectionId = state[STATE].nextInspectionId || 1;
+        state[STATE].tailors = state[STATE].tailors || [];
+        state[STATE].quotes = state[STATE].quotes || [];
+        state[STATE].jobs = state[STATE].jobs || [];
+        state[STATE].inspections = state[STATE].inspections || [];
+    }
+
+    function registerEventHandlers() {
+        on('chat:message', handleInput);
+    }
+
+    function esc(s) {
+        return String(s || '')
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function sanitizeWhisperName(name) {
+        return String(name || 'gm').replace(/\s*\(GM\)\s*$/, '').replace(/"/g, '');
+    }
+
+    function setWhisperTarget(msg) {
+        currentWhisperTarget = sanitizeWhisperName((msg && msg.who) || 'gm');
+    }
+
+    function send(html) {
+        var target = sanitizeWhisperName(currentWhisperTarget || 'gm');
+        sendChat('', '/w "' + target + '" ' + html);
+    }
+
+    function box(title, body) {
+        return '<div style="background:' + CONFIG.colors.panelBg + ';border:1px solid ' + CONFIG.colors.panelBorder + ';padding:10px;max-width:540px;color:' + CONFIG.colors.text + ';">' +
+            '<div style="font-size:20px;font-weight:bold;margin-bottom:8px;">' + esc(title) + '</div>' + body + '</div>';
+    }
+
+    function line(label, value) {
+        return '<div style="margin:2px 0;"><b>' + esc(label) + ':</b> ' + value + '</div>';
+    }
+
+    function btn(label, command, bg, border, width) {
+        return '<a style="display:inline-block;text-align:center;margin:4px 6px 4px 0;padding:6px 8px;min-width:' + (width || 110) +
+            'px;color:' + CONFIG.colors.buttonText + ';background:' + (bg || CONFIG.colors.buttonBg) + ';border:1px solid ' +
+            (border || CONFIG.colors.buttonBorder) + ';text-decoration:none;" href="' + esc(command) + '">' + esc(label) + '</a>';
+    }
+
+    function btnReset(label, command, width) {
+        return '<a style="display:inline-block;text-align:center;margin:4px 6px 4px 0;padding:6px 8px;min-width:' + (width || 110) +
+            'px;color:white;background:' + CONFIG.colors.dangerBg + ';border:1px solid ' + CONFIG.colors.dangerBorder +
+            ';text-decoration:none;" href="' + esc(command) + '">' + esc(label) + '</a>';
+    }
+
+    function sectionHeader(title) {
+        return '<div style="font-weight:bold;margin:10px 0 4px 0;">' + esc(title) + '</div>';
+    }
+
+    function parseArgs(content) {
+        var args = {};
+        var s = String(content || '');
+        var i = s.indexOf(' --');
+        while (i !== -1) {
+            i += 3;
+            var keyEnd = s.indexOf('|', i);
+            if (keyEnd === -1) { break; }
+            var key = s.substring(i, keyEnd).toLowerCase();
+            var next = s.indexOf(' --', keyEnd + 1);
+            var val = (next === -1 ? s.substring(keyEnd + 1) : s.substring(keyEnd + 1, next)).trim();
+            args[key] = val;
+            i = next;
+        }
+        return args;
+    }
+
+    function isAffirmative(val) {
+        var t = String(val === undefined || val === null ? '' : val).trim().toLowerCase();
+        return t === '1' || t === 'yes' || t === 'y' || t === 'true';
+    }
+
+    function getObjById(type, id) {
+        if (!id) return null;
+        return getObj(type, id) || null;
+    }
+
+    function getCharacterByTokenId(tokenId) {
+        var token = getObjById('graphic', tokenId);
+        if (!token) return null;
+        var rep = token.get('represents');
+        return rep ? getObjById('character', rep) : null;
+    }
+
+    function getSelectedCharacter(msg) {
+        if (!msg.selected || !msg.selected.length) return null;
+        return getCharacterByTokenId(msg.selected[0]._id);
+    }
+
+    function canControl(playerid, character) {
+        if (!character) return false;
+        if (playerIsGM(playerid)) return true;
+        var controlled = String(character.get('controlledby') || '');
+        if (!controlled) return false;
+        return _.contains(controlled.split(','), 'all') || _.contains(controlled.split(','), playerid);
+    }
+
+    function resolveEmployer(msg, args) {
+        var selected = getSelectedCharacter(msg);
+        var explicit = getObjById('character', args.pc || args.employer);
+        if (selected && canControl(msg.playerid, selected)) return selected;
+        if (explicit && canControl(msg.playerid, explicit)) return explicit;
+        return playerIsGM(msg.playerid) ? (selected || explicit) : null;
+    }
+
+    function requireEmployer(msg, args) {
+        var employer = resolveEmployer(msg, args);
+        if (!employer) {
+            send(box('Tailor Shop', '<div>Select the buyer PC token first.</div>'));
+            return null;
+        }
+        return employer;
+    }
+
+    function findAttr(characterId, name) {
+        return findObjs({ type: 'attribute', characterid: characterId, name: name }, { caseInsensitive: true })[0] || null;
+    }
+
+    function getAttr(characterId, name, defaultValue) {
+        var attr = findAttr(characterId, name);
+        if (!attr) return defaultValue;
+        var cur = attr.get('current');
+        return cur === '' || cur === undefined || cur === null ? defaultValue : cur;
+    }
+
+    function setAttr(characterId, name, value) {
+        var attr = findAttr(characterId, name);
+        if (attr) attr.set('current', value);
+        else createObj('attribute', { characterid: characterId, name: name, current: value });
+    }
+
+    function toNumber(value, defaultValue) {
+        var n = Number(value);
+        return isNaN(n) ? (defaultValue || 0) : n;
+    }
+
+    function parseMoneyCp(value) {
+        return Math.round(toNumber(value, 0));
+    }
+
+    function toCp(gp, sp, cp) {
+        return parseMoneyCp(gp) * 100 + parseMoneyCp(sp) * 10 + parseMoneyCp(cp);
+    }
+
+    function fromCp(totalCp) {
+        totalCp = Math.max(0, Math.round(totalCp));
+        var gp = Math.floor(totalCp / 100);
+        totalCp -= gp * 100;
+        var sp = Math.floor(totalCp / 10);
+        totalCp -= sp * 10;
+        return { gp: gp, sp: sp, cp: totalCp };
+    }
+
+    function formatCp(totalCp) {
+        var c = fromCp(totalCp);
+        var parts = [];
+        if (c.gp) parts.push(c.gp + ' gp');
+        if (c.sp) parts.push(c.sp + ' sp');
+        if (c.cp || !parts.length) parts.push(c.cp + ' cp');
+        return parts.join(', ');
+    }
+
+    function gpToCp(gp) {
+        return Math.round(toNumber(gp, 0) * 100);
+    }
+
+    function percentOfCp(totalCp, pct) {
+        return Math.round(totalCp * (pct / 100));
+    }
+
+    function getTreasuryCp(character) {
+        return toCp(getAttr(character.id, CONFIG.coinAttrs.gp, 0), getAttr(character.id, CONFIG.coinAttrs.sp, 0), getAttr(character.id, CONFIG.coinAttrs.cp, 0));
+    }
+
+    function setTreasuryCp(character, totalCp) {
+        var c = fromCp(totalCp);
+        setAttr(character.id, CONFIG.coinAttrs.gp, c.gp);
+        setAttr(character.id, CONFIG.coinAttrs.sp, c.sp);
+        setAttr(character.id, CONFIG.coinAttrs.cp, c.cp);
+    }
+
+    function payCostOrReport(employer, totalCp) {
+        var treasury = getTreasuryCp(employer);
+        if (treasury < totalCp) return { ok: false, needed: totalCp, onHand: treasury };
+        setTreasuryCp(employer, treasury - totalCp);
+        return { ok: true, paid: totalCp };
+    }
+
+    function rollInteger(min, max) {
+        return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+
+    function randomName() {
+        return CONFIG.randomNames[rollInteger(0, CONFIG.randomNames.length - 1)];
+    }
+
+    function generateTailorId() {
+        return 'lw' + (state[STATE].nextTailorId++);
+    }
+
+    function generateQuoteId() {
+        return 'q' + (state[STATE].nextQuoteId++);
+    }
+
+    function generateJobId() {
+        return 'j' + (state[STATE].nextJobId++);
+    }
+
+    function generateInspectionId() {
+        return 'i' + (state[STATE].nextInspectionId++);
+    }
+
+    function getAllTailors() {
+        return state[STATE].tailors || [];
+    }
+
+    function getTailor(id) {
+        return _.find(state[STATE].tailors, function (w) { return String(w.id) === String(id); }) || null;
+    }
+
+    function getQuote(id) {
+        return _.find(state[STATE].quotes, function (q) { return String(q.id) === String(id); }) || null;
+    }
+
+    function removeQuote(id) {
+        state[STATE].quotes = _.reject(state[STATE].quotes, function (q) { return String(q.id) === String(id); });
+    }
+
+    function getJob(id) {
+        return _.find(state[STATE].jobs, function (j) { return String(j.id) === String(id); }) || null;
+    }
+
+    function getInspection(id) {
+        return _.find(state[STATE].inspections, function (i) { return String(i.id) === String(id); }) || null;
+    }
+
+    function getEmployerQuotes(employerId) {
+        return _.filter(state[STATE].quotes, function (q) { return String(q.employerId) === String(employerId); });
+    }
+
+    function getEmployerJobs(employerId) {
+        return _.filter(state[STATE].jobs, function (j) { return String(j.employerId) === String(employerId); });
+    }
+
+    function getEmployerInspections(employerId) {
+        return _.filter(state[STATE].inspections, function (i) { return String(i.employerId) === String(employerId); });
+    }
+
+    function raceEfficiency(race) {
+        return (CONFIG.race[race] && CONFIG.race[race].efficiency) || 1;
+    }
+
+    function determineTailorSkill(settlement) {
+        var key = String(settlement || 'town').toLowerCase();
+        var table = CONFIG.settlementSkill[key] || CONFIG.settlementSkill.town;
+        var roll = rollInteger(1, 100);
+        if (roll <= table.poor) return { rawRoll: roll, settlement: key, tier: 0, label: 'Poor' };
+        if (roll <= table.poor + table.fair) return { rawRoll: roll, settlement: key, tier: 1, label: 'Fair' };
+        if (roll <= table.poor + table.fair + table.good) return { rawRoll: roll, settlement: key, tier: 2, label: 'Good' };
+        if (roll <= table.poor + table.fair + table.good + table.excellent) return { rawRoll: roll, settlement: key, tier: 3, label: 'Excellent' };
+        return { rawRoll: roll, settlement: key, tier: 4, label: 'Master' };
+    }
+
+    function tailorTierLabel(tier) {
+        var map = ['Poor', 'Fair', 'Good', 'Excellent', 'Master'];
+        return map[Math.max(0, Math.min(4, parseInt(tier || 0, 10)))] || 'Fair';
+    }
+
+    function tailorQueryLabel(w) {
+        return String(w.name || 'Tailor') + ' (' + tailorTierLabel(w.skillTier) + ')';
+    }
+
+    function humanizeRole(role) {
+        var map = { blacksmith: 'Blacksmith', leatherworker: 'Leatherworker', woodworker: 'Woodworker' };
+        return map[String(role || '').toLowerCase()] || String(role || 'Support');
+    }
+
+    function specialistSupportCostCp(role, days) {
+        var monthlyGp = CONFIG.helperMonthlyGp[String(role || '').toLowerCase()] || 0;
+        return gpToCp((monthlyGp / 30) * Math.max(1, days || 1));
+    }
+
+    function arraySupportCostCp(support, days) {
+        return _.reduce(support || [], function (sum, role) { return sum + specialistSupportCostCp(role, days); }, 0);
+    }
+
+    function canOfferProduct(worker, key) {
+        var product = CONFIG.products[key];
+        if (!product || !worker) return false;
+        return worker.skillTier >= product.skillMin;
+    }
+
+    function canRepairProduct(worker, key) {
+        var product = CONFIG.products[key];
+        if (!product || !worker || !product.repairable) return false;
+        return worker.skillTier >= product.skillMin;
+    }
+
+    function productActualDays(product, quantity, efficiency) {
+        quantity = Math.max(1, parseInt(quantity || 1, 10));
+        if (product.quantityBase && product.quantityBase > 1) {
+            return Math.ceil(((quantity / product.quantityBase) * product.baseDays) / Math.max(1, efficiency || 1));
+        }
+        return Math.ceil((product.baseDays * quantity) / Math.max(1, efficiency || 1));
+    }
+
+    function productHumanDays(product, quantity) {
+        quantity = Math.max(1, parseInt(quantity || 1, 10));
+        if (product.quantityBase && product.quantityBase > 1) {
+            return Math.ceil((quantity / product.quantityBase) * product.baseDays);
+        }
+        return Math.ceil(product.baseDays * quantity);
+    }
+
+    function repairActualDays(product, efficiency) {
+        return Math.max(1, Math.ceil(Math.max(1, Math.ceil(product.baseDays / 4)) / Math.max(1, efficiency || 1)));
+    }
+
+    function productQueryLabel(product) {
+        return String(product.label || 'Item').replace(/,/g, ';').replace(/\|/g, '/').replace(/\}/g, ')');
+    }
+
+    function buildProductQueryForWorker(worker, label) {
+        var keys = _.filter(_.keys(CONFIG.products), function (key) { return canOfferProduct(worker, key); });
+        if (!keys.length) return '?{' + label + '|}';
+        return '?{' + label + '|' + _.map(keys, function (key) {
+            return productQueryLabel(CONFIG.products[key]) + ',' + key;
+        }).join('|') + '}';
+    }
+
+    function buildRepairProductQueryForWorker(worker, label) {
+        var keys = _.filter(_.keys(CONFIG.products), function (key) { return canRepairProduct(worker, key); });
+        if (!keys.length) return '?{' + label + '|}';
+        return '?{' + label + '|' + _.map(keys, function (key) {
+            return productQueryLabel(CONFIG.products[key]) + ',' + key;
+        }).join('|') + '}';
+    }
+
+    function parseSupportRoles(value) {
+        var clean = String(value || '').toLowerCase().trim();
+        if (!clean || clean === 'none') return [];
+        return _.chain(clean.split(/[^a-z]+/))
+            .filter(function (v) { return v === 'blacksmith' || v === 'leatherworker' || v === 'woodworker'; })
+            .uniq()
+            .value();
+    }
+
+    function createQuote(employer, worker, options) {
+        var reactionBonus = Math.round(toNumber(getAttr(employer.id, CONFIG.reactionAttr, 0), 0));
+        var days = Math.max(1, Math.ceil(options.days));
+        var basePriceCp = gpToCp(options.basePriceGp || 0);
+        var randomVariancePct = options.skipRandomVariance ? 0 : rollInteger(-15, 50);
+        var randomAdjustedCp = Math.max(0, Math.round(basePriceCp * (1 + (randomVariancePct / 100))));
+        var helperCostCp = arraySupportCostCp(options.support || [], days);
+        var clothCostCp = options.cloth ? Math.round(basePriceCp * 0.10) : 0;
+        var fixedCostCp = helperCostCp + clothCostCp + gpToCp(options.extraCostGp || 0);
+        var reactionAdjustedCp = Math.max(0, Math.round(randomAdjustedCp * (1 - (reactionBonus / 100))));
+        var floorNegotiableCp = Math.round(basePriceCp * 0.30);
+        var offeredNegotiableCp = Math.max(floorNegotiableCp, reactionAdjustedCp);
+        var totalQuoteCp = fixedCostCp + offeredNegotiableCp;
+        var depositCp = Math.ceil(totalQuoteCp / 2);
+        var balanceCp = totalQuoteCp - depositCp;
+        var quote = {
+            id: generateQuoteId(),
+            workerId: worker.id,
+            workerName: worker.name,
+            employerId: employer.id,
+            employerName: employer.get('name') || 'Employer',
+            description: options.description,
+            quantity: options.quantity || 1,
+            category: options.category || 'gear',
+            support: options.support || [],
+            cloth: !!options.cloth,
+            actualDays: days,
+            humanDays: options.humanDays || days,
+            basePriceCp: basePriceCp,
+            randomVariancePct: randomVariancePct,
+            randomAdjustedCp: randomAdjustedCp,
+            floorNegotiableCp: floorNegotiableCp,
+            fixedCostCp: fixedCostCp,
+            helperCostCp: helperCostCp,
+            clothCostCp: clothCostCp,
+            extraCostCp: gpToCp(options.extraCostGp || 0),
+            reactionBonus: reactionBonus,
+            reactionAdjustedCp: reactionAdjustedCp,
+            currentNegotiableCp: offeredNegotiableCp,
+            currentQuoteCp: totalQuoteCp,
+            depositCp: depositCp,
+            balanceDueCp: balanceCp,
+            haggleAttempts: 0,
+            haggleFailures: 0,
+            haggleDone: false,
+            quoteType: options.quoteType || 'standard',
+            productKey: options.productKey || '',
+            notes: options.notes || ''
+        };
+        state[STATE].quotes.push(quote);
+        return quote;
+    }
+
+    function quoteSummaryHtml(quote, showButtons) {
+        var haggleTarget = Math.max(0, Math.min(95, 10 + toNumber(quote.reactionBonus, 0)));
+        var body = '';
+        body += line('Tailor', esc(quote.workerName));
+        body += line('Job', esc(quote.description));
+        body += line('Actual days', esc(quote.actualDays));
+        body += line('Starting table price', esc(formatCp(quote.basePriceCp)));
+        if (quote.quoteType === 'repair') {
+            body += line('Repair roll', esc((quote.repairPct || 0) + '% of listed price'));
+            body += line('Inspection work', esc('1 day already spent'));
+        } else {
+            body += line('Random variance', esc((quote.randomVariancePct >= 0 ? '+' : '') + quote.randomVariancePct + '%'));
+            body += line('After random variance', esc(formatCp(quote.randomAdjustedCp)));
+        }
+        body += line('Reaction bonus', esc((quote.reactionBonus >= 0 ? '+' : '') + quote.reactionBonus + '%'));
+        body += line('After reaction adjustment', esc(formatCp(quote.currentNegotiableCp)));
+        body += line('Haggle target', esc(haggleTarget + '%'));
+        if (quote.support.length) body += line('Support trades', esc(_.map(quote.support, humanizeRole).join(', ')));
+        if (quote.helperCostCp) body += line('Support trade time cost', esc(formatCp(quote.helperCostCp)));
+        if (quote.clothCostCp) body += line('Material costs', esc(formatCp(quote.clothCostCp)));
+        if (quote.extraCostCp) body += line('Extra fixed cost', esc(formatCp(quote.extraCostCp)));
+        if (quote.fixedCostCp) body += line('Material/helper costs', esc(formatCp(quote.fixedCostCp)));
+        if (quote.notes) body += '<div style="margin-top:6px;color:' + CONFIG.colors.subtext + ';">' + esc(quote.notes) + '</div>';
+        body += '<div style="margin-top:8px;padding-top:8px;border-top:1px solid #2e2e2e;">' +
+            line('Final quote', '<span style="color:#ffd25e;font-weight:bold;">' + esc(formatCp(quote.currentQuoteCp)) + '</span>') +
+            line('Half down now', esc(formatCp(quote.depositCp))) +
+            line('Balance on pickup', esc(formatCp(quote.balanceDueCp))) + '</div>';
+        if (showButtons) {
+            body += '<div style="margin-top:8px;">' +
+                btn('Place Order', '!tailor-accept-quote --pc|' + quote.employerId + ' --quote|' + quote.id, CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110) +
+                (!quote.haggleDone ? btn('Haggle Price', '!tailor-counteroffer --pc|' + quote.employerId + ' --quote|' + quote.id, CONFIG.colors.warnBg, CONFIG.colors.warnBorder, 110) : '') +
+                btn('Deny Quote', '!tailor-deny-quote --pc|' + quote.employerId + ' --quote|' + quote.id, CONFIG.colors.dangerBg, CONFIG.colors.dangerBorder, 110) +
+                btn('Main Menu', '!tailor-menu --pc|' + quote.employerId, CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110) +
+                '</div>';
+        }
+        return body;
+    }
+
+    function skillAvailabilityHtml(worker) {
+        var available = [];
+        var unavailable = [];
+        _.each(_.keys(CONFIG.products), function (key) {
+            var product = CONFIG.products[key];
+            if (canOfferProduct(worker, key)) available.push(product.label);
+            else unavailable.push(product.label);
+        });
+        available.sort();
+        unavailable.sort();
+        return sectionHeader('Item availability') +
+            '<div style="margin:4px 0 6px 0;color:#7CFC7C;"><b>Can make:</b> ' + esc(available.join(', ')) + '</div>' +
+            '<div style="margin:4px 0 8px 0;color:#ff8a8a;"><b>Cannot make:</b> ' + (unavailable.length ? esc(unavailable.join(', ')) : 'None') + '</div>';
+    }
+
+    function buildWorkerButtons(employer, commandPrefix, colorBg, colorBorder) {
+        var workers = getAllTailors();
+        if (!workers.length) return '<div>No tailors found.</div>';
+        return _.map(workers, function (worker) {
+            return btn(tailorQueryLabel(worker), commandPrefix + ' --pc|' + employer.id + ' --worker|' + worker.id, colorBg || CONFIG.colors.primaryBg, colorBorder || CONFIG.colors.primaryBorder, 190);
+        }).join('');
+    }
+
+    function menuBody(msg, employer) {
+        var employerArg = employer ? (' --pc|' + employer.id) : ' --pc|@{selected|character_id}';
+        var hasQuotes = employer && getEmployerQuotes(employer.id).length;
+        var infoLine = employer ? '<div style="margin-bottom:8px;color:' + CONFIG.colors.subtext + ';">Use the selected PC token as the buyer for this menu.</div>' : '<div style="margin-bottom:8px;color:' + CONFIG.colors.subtext + ';">Select the buyer PC token first.</div>';
+        return infoLine +
+            '<div style="margin-bottom:8px;">' +
+            btn('Sew Goods', '!tailor-quote-start' + employerArg, CONFIG.colors.primaryBg, CONFIG.colors.primaryBorder, 125) +
+            btn('Tailor Repairs', '!tailor-repair-start' + employerArg, CONFIG.colors.warnBg, CONFIG.colors.warnBorder, 125) +
+            (playerIsGM(msg.playerid) ? btn('Custom Item', '!tailor-custom-start' + employerArg, CONFIG.colors.gmBg, CONFIG.colors.gmBorder, 125) : '') +
+            '</div>' +
+            '<div style="margin-bottom:8px;">' +
+            btn('Price List', '!tailor-price-list' + employerArg, CONFIG.colors.primaryBg, CONFIG.colors.primaryBorder, 125) +
+            btn('Work Progress', '!tailor-report' + employerArg, CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 125) +
+            '</div>' +
+            '<div style="margin-bottom:8px;">' +
+            btn('Apply Days', '!tailor-apply-days' + employerArg + ' --days|?{Days passed|1}', CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 125) +
+            (hasQuotes ? btn('View Quotes', '!tailor-quotes' + employerArg, CONFIG.colors.warnBg, CONFIG.colors.warnBorder, 125) : '') +
+            '</div>' +
+            '<div style="margin-bottom:8px;">' +
+            btn('Add Tailor', '!tailor-add-worker' + employerArg + ' --name|?{Tailor Name|' + randomName() + '} --race|?{Race|Human,human|Elf,elf|Dwarf,dwarf|Gnome,gnome|Halfling,halfling} --settlement|?{Settlement Size|Village,village|Town,town|City,city|Metropolis,metropolis}', CONFIG.colors.primaryBg, CONFIG.colors.primaryBorder, 125) +
+            btn('Remove Tailor', '!tailor-remove-worker-menu' + employerArg, CONFIG.colors.dangerBg, CONFIG.colors.dangerBorder, 125) +
+            '</div>' +
+            '<div style="margin-bottom:8px;">' +
+            btn('Remove All Tailors', '!tailor-remove-all' + employerArg + ' --confirm|?{Remove all tailors and all open tailor-shop quotes/jobs/inspections?|No,0|Yes,1}', CONFIG.colors.dangerBg, CONFIG.colors.dangerBorder, 170) +
+            '</div>' +
+            ((employer && playerIsGM(msg.playerid)) ? '<div style="margin-bottom:8px;">' + btnReset('Reset Campaign', '!tailor-reset --confirm|?{Reset all Tailor Shop data for the whole campaign?|No,0|Yes,1}', 125) + '</div>' : '') +
+            '<div style="color:' + CONFIG.colors.subtext + ';font-size:12px;">Tailor skill is weighted by settlement size, with good and excellent tailors more likely in larger towns and cities, but still possible in smaller places. Poor and fair tailors cannot produce fine clothing. Repairs use the same inspection and repair percentage flow as your other shops.</div>';
+    }
+
+    function handleMenu(msg, args) {
+        send(box('Tailor Shop Menu', menuBody(msg, resolveEmployer(msg, args))));
+    }
+
+    function handleAddWorker(msg, args) {
+        var employer = requireEmployer(msg, args);
+        var race, settlement, skill, worker;
+        if (!employer) return;
+        race = String(args.race || 'human').toLowerCase();
+        settlement = String(args.settlement || 'town').toLowerCase();
+        skill = determineTailorSkill(settlement);
+        worker = {
+            id: generateTailorId(),
+            type: 'tailor',
+            name: args.name || randomName(),
+            race: race,
+            settlement: settlement,
+            efficiency: raceEfficiency(race),
+            skillRoll: skill.rawRoll,
+            skillAdjusted: skill.rawRoll,
+            skillTier: skill.tier,
+            skillLabel: skill.label,
+            setupCostCp: 0
+        };
+        state[STATE].tailors.push(worker);
+        send(box('Tailor Added',
+            line('Employer', esc(employer.get('name'))) +
+            line('Name', esc(worker.name)) +
+            line('Race', esc(worker.race)) +
+            line('Settlement size', esc(worker.settlement)) +
+            line('Skill roll', esc(worker.skillRoll)) +
+            line('Skill', esc(worker.skillLabel)) +
+            line('Efficiency', esc(worker.efficiency + 'x')) +
+            skillAvailabilityHtml(worker) +
+            btn('Sew Goods', '!tailor-quote-menu --pc|' + employer.id + ' --worker|' + worker.id, CONFIG.colors.primaryBg, CONFIG.colors.primaryBorder, 110) +
+            btn('Repairs', '!tailor-repair-menu --pc|' + employer.id + ' --worker|' + worker.id, CONFIG.colors.warnBg, CONFIG.colors.warnBorder, 110) +
+            (playerIsGM(msg.playerid) ? btn('Custom Item', '!tailor-custom-menu --pc|' + employer.id + ' --worker|' + worker.id, CONFIG.colors.gmBg, CONFIG.colors.gmBorder, 110) : '') +
+            btn('Main Menu', '!tailor-menu --pc|' + employer.id, CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110)
+        ));
+    }
+
+    function handleQuoteStart(msg, args) {
+        var employer = requireEmployer(msg, args);
+        if (!employer) return;
+        if (!getAllTailors().length) {
+            send(box('Sew Goods', '<div>No tailors are recorded in the campaign yet.</div>' + btn('Main Menu', '!tailor-menu --pc|' + employer.id, CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110)));
+            return;
+        }
+        send(box('Sew Goods',
+            '<div>Choose an available tailor. The selected token is the buyer.</div>' +
+            buildWorkerButtons(employer, '!tailor-quote-menu', CONFIG.colors.primaryBg, CONFIG.colors.primaryBorder) +
+            '<div style="margin-top:8px;">' + btn('Main Menu', '!tailor-menu --pc|' + employer.id, CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110) + '</div>'
+        ));
+    }
+
+    function handleRepairStart(msg, args) {
+        var employer = requireEmployer(msg, args);
+        if (!employer) return;
+        if (!getAllTailors().length) {
+            send(box('Tailor Repairs', '<div>No tailors are recorded in the campaign yet.</div>' + btn('Main Menu', '!tailor-menu --pc|' + employer.id, CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110)));
+            return;
+        }
+        send(box('Tailor Repairs',
+            '<div>Choose a tailor to inspect the damaged item. The selected token is the buyer.</div>' +
+            buildWorkerButtons(employer, '!tailor-repair-menu', CONFIG.colors.warnBg, CONFIG.colors.warnBorder) +
+            '<div style="margin-top:8px;">' + btn('Main Menu', '!tailor-menu --pc|' + employer.id, CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110) + '</div>'
+        ));
+    }
+
+    function handleCustomStart(msg, args) {
+        var employer = requireEmployer(msg, args);
+        if (!employer) return;
+        if (!playerIsGM(msg.playerid)) {
+            send(box('Custom Item', '<div>Only the GM can create custom tailor-shop quotes.</div>'));
+            return;
+        }
+        if (!getAllTailors().length) {
+            send(box('Custom Item', '<div>No tailors are recorded in the campaign yet.</div>' + btn('Main Menu', '!tailor-menu --pc|' + employer.id, CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110)));
+            return;
+        }
+        send(box('Custom Item',
+            '<div>Choose the tailor who will quote the custom item.</div>' +
+            buildWorkerButtons(employer, '!tailor-custom-menu', CONFIG.colors.gmBg, CONFIG.colors.gmBorder) +
+            '<div style="margin-top:8px;">' + btn('Main Menu', '!tailor-menu --pc|' + employer.id, CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110) + '</div>'
+        ));
+    }
+
+    function priceListRepairHtml(product) {
+        var minCp = percentOfCp(gpToCp(product.basePriceGp || 0), CONFIG.repairCostMinPct);
+        var maxCp = percentOfCp(gpToCp(product.basePriceGp || 0), CONFIG.repairCostMaxPct);
+        return 'Repair quote after 1-day inspection: ' + esc(formatCp(minCp)) + ' to ' + esc(formatCp(maxCp)) + '.';
+    }
+
+    function handlePriceList(msg, args) {
+        var employer = resolveEmployer(msg, args);
+        var normalItems = [], fineItems = [];
+        _.each(_.keys(CONFIG.products), function (key) {
+            var product = CONFIG.products[key];
+            var row = '<li><b>' + esc(product.label) + '</b> - list price ' + esc(formatCp(gpToCp(product.basePriceGp || 0))) +
+                ' - ' + esc(product.baseDays) + ' day(s)' +
+                (product.notes ? ' - ' + esc(product.notes) : '') +
+                ' - ' + priceListRepairHtml(product) + '</li>';
+            if (product.category === 'fine') fineItems.push(row);
+            else normalItems.push(row);
+        });
+        send(box('Tailor Shop Price List',
+            '<div style="color:' + CONFIG.colors.subtext + ';margin-bottom:8px;">Starting prices below are the base values used before random variance, reaction bonus adjustment, helper costs, material costs, and haggling. Fine clothing requires a good tailor or better. Custom item quotes can also be entered by the GM and will run through the same pricing and haggle flow.</div>' +
+            sectionHeader('Standard garments and goods') +
+            '<ul style="margin:4px 0 0 18px;">' + normalItems.join('') + '</ul>' +
+            sectionHeader('Fine clothing') +
+            '<ul style="margin:4px 0 0 18px;">' + fineItems.join('') + '</ul>' +
+            sectionHeader('Referrals') +
+            '<ul style="margin:4px 0 0 18px;">' + _.map(CONFIG.referrals, function (r) { return '<li>' + esc(r) + '</li>'; }).join('') + '</ul>' +
+            btn('Main Menu', employer ? '!tailor-menu --pc|' + employer.id : '!tailor-menu', CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110)
+        ));
+    }
+
+    function handleQuoteMenu(msg, args) {
+        var employer = requireEmployer(msg, args);
+        var worker, productQuery;
+        if (!employer) return;
+        worker = getTailor(args.worker);
+        if (!worker) {
+            send(box('Sew Goods', '<div>Pick an existing tailor first.</div>' + btn('Main Menu', '!tailor-menu --pc|' + employer.id, CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110)));
+            return;
+        }
+        productQuery = buildProductQueryForWorker(worker, 'Choose Item');
+        send(box('Sew Goods',
+            line('Employer', esc(employer.get('name'))) +
+            line('Tailor', esc(worker.name + ' (' + worker.skillLabel + ')')) +
+            skillAvailabilityHtml(worker) +
+            '<div>Choose the item and quantity to quote.</div>' +
+            btn('Request Quote', '!tailor-quote-standard --pc|' + employer.id + ' --worker|' + worker.id + ' --job|' + productQuery + ' --qty|?{Quantity|1}', CONFIG.colors.primaryBg, CONFIG.colors.primaryBorder, 125) +
+            btn('Main Menu', '!tailor-menu --pc|' + employer.id, CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110)
+        ));
+    }
+
+    function handleCustomMenu(msg, args) {
+        var employer = requireEmployer(msg, args);
+        var worker;
+        if (!employer) return;
+        if (!playerIsGM(msg.playerid)) {
+            send(box('Custom Item', '<div>Only the GM can create custom tailor-shop quotes.</div>'));
+            return;
+        }
+        worker = getTailor(args.worker);
+        if (!worker) {
+            send(box('Custom Item', '<div>Pick an existing tailor first.</div>' + btn('Main Menu', '!tailor-menu --pc|' + employer.id, CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110)));
+            return;
+        }
+        send(box('Custom Item Quote',
+            line('Employer', esc(employer.get('name'))) +
+            line('Tailor', esc(worker.name + ' (' + worker.skillLabel + ')')) +
+            '<div>The GM enters the custom item name, base listed price, and days. The quote then uses the normal tailor-shop price formula, reaction bonus, haggling, and half-down payment.</div>' +
+            btn('Create Custom Quote', '!tailor-custom-quote --pc|' + employer.id + ' --worker|' + worker.id +
+                ' --name|?{Item name|Custom cloth item}' +
+                ' --pricegp|?{Base listed price in gp|10}' +
+                ' --days|?{Base days|5}' +
+                ' --support|?{Support trades|None,none|Blacksmith,blacksmith|Leatherworker,leatherworker|Woodworker,woodworker|Blacksmith and Leatherworker,blacksmith+leatherworker|Blacksmith and Woodworker,blacksmith+woodworker|Leatherworker and Woodworker,leatherworker+woodworker}' +
+                ' --cloth|?{Cloth materials charge?|Yes,yes|No,no}' +
+                ' --fine|?{Requires fine tailoring?|No,no|Yes,yes} --notes|?{Notes|Custom tailored item}', CONFIG.colors.gmBg, CONFIG.colors.gmBorder, 140) +
+            btn('Main Menu', '!tailor-menu --pc|' + employer.id, CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110)
+        ));
+    }
+
+    function handleRepairMenu(msg, args) {
+        var employer = requireEmployer(msg, args);
+        var worker, repairQuery;
+        if (!employer) return;
+        worker = getTailor(args.worker);
+        if (!worker) {
+            send(box('Tailor Repairs', '<div>Pick an existing tailor first.</div>' + btn('Main Menu', '!tailor-menu --pc|' + employer.id, CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110)));
+            return;
+        }
+        repairQuery = buildRepairProductQueryForWorker(worker, 'Choose Damaged Item');
+        send(box('Tailor Repairs',
+            line('Employer', esc(employer.get('name'))) +
+            line('Tailor', esc(worker.name + ' (' + worker.skillLabel + ')')) +
+            '<div>Inspection takes 1 day. After that the tailor decides whether the item is repairable, then rolls a price from ' + CONFIG.repairCostMinPct + '% to ' + CONFIG.repairCostMaxPct + '% of listed price.</div>' +
+            btn('Start Inspection', '!tailor-repair-inspect --pc|' + employer.id + ' --worker|' + worker.id + ' --job|' + repairQuery, CONFIG.colors.warnBg, CONFIG.colors.warnBorder, 125) +
+            btn('Main Menu', '!tailor-menu --pc|' + employer.id, CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110)
+        ));
+    }
+
+    function handleQuoteStandard(msg, args) {
+        var employer = requireEmployer(msg, args);
+        var worker, product, qty, days, humanDays, quote;
+        if (!employer) return;
+        worker = getTailor(args.worker);
+        product = CONFIG.products[String(args.job || '')];
+        if (!worker) {
+            send(box('Tailor Shop Quote', '<div>Pick an existing tailor first.</div>' + btn('Main Menu', '!tailor-menu --pc|' + employer.id, CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110)));
+            return;
+        }
+        if (!product || !canOfferProduct(worker, String(args.job || ''))) {
+            send(box('Tailor Shop Quote',
+                line('Employer', esc(employer.get('name'))) + line('Tailor', esc(worker.name)) +
+                '<div>That item cannot be offered by this tailor at the current skill level.</div>' +
+                btn('Quote Menu', '!tailor-quote-menu --pc|' + employer.id + ' --worker|' + worker.id, CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110)
+            ));
+            return;
+        }
+        qty = Math.max(1, parseInt(args.qty || 1, 10));
+        days = productActualDays(product, qty, worker.efficiency);
+        humanDays = productHumanDays(product, qty);
+        quote = createQuote(employer, worker, {
+            description: product.label + (qty > 1 ? ' x' + qty : ''),
+            quantity: qty,
+            category: product.category,
+            support: product.support,
+            cloth: product.cloth,
+            days: days,
+            humanDays: humanDays,
+            basePriceGp: (product.basePriceGp || 0) * qty,
+            extraCostGp: 0,
+            productKey: product.key,
+            notes: product.notes,
+            quoteType: 'standard'
+        });
+        send(box('Tailor Shop Quote', quoteSummaryHtml(quote, true)));
+    }
+
+    function handleCustomQuote(msg, args) {
+        var employer = requireEmployer(msg, args);
+        var worker, quote, support, clothFlag, name, priceGp, days, fineRequired;
+        if (!employer) return;
+        if (!playerIsGM(msg.playerid)) {
+            send(box('Custom Item', '<div>Only the GM can create custom tailor-shop quotes.</div>'));
+            return;
+        }
+        worker = getTailor(args.worker);
+        if (!worker) {
+            send(box('Custom Item', '<div>Pick an existing tailor first.</div>' + btn('Main Menu', '!tailor-menu --pc|' + employer.id, CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110)));
+            return;
+        }
+        fineRequired = String(args.fine || 'no').toLowerCase() === 'yes';
+        if (fineRequired && worker.skillTier < 2) {
+            send(box('Custom Item',
+                line('Employer', esc(employer.get('name'))) +
+                line('Tailor', esc(worker.name + ' (' + worker.skillLabel + ')')) +
+                '<div>This custom item requires fine tailoring, and this tailor is not skilled enough to produce fine clothing.</div>' +
+                btn('Custom Menu', '!tailor-custom-menu --pc|' + employer.id + ' --worker|' + worker.id, CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110)
+            ));
+            return;
+        }
+        name = String(args.name || 'Custom tailored item').trim() || 'Custom tailored item';
+        priceGp = Math.max(0, toNumber(args.pricegp, 0));
+        days = Math.max(1, Math.ceil(toNumber(args.days, 1)));
+        support = parseSupportRoles(args.support);
+        clothFlag = String(args.cloth || 'yes').toLowerCase() !== 'no';
+        quote = createQuote(employer, worker, {
+            description: name,
+            quantity: 1,
+            category: fineRequired ? 'fine' : 'custom',
+            support: support,
+            cloth: clothFlag,
+            days: days,
+            humanDays: days,
+            basePriceGp: priceGp,
+            extraCostGp: 0,
+            productKey: '',
+            notes: (args.notes || 'Custom item quote entered by the GM.') + (fineRequired ? ' Fine tailoring required.' : ''),
+            quoteType: 'custom'
+        });
+        send(box('Custom Tailor Shop Quote', quoteSummaryHtml(quote, true)));
+    }
+
+    function handleRepairInspect(msg, args) {
+        var employer = requireEmployer(msg, args);
+        var worker, product, inspection;
+        if (!employer) return;
+        worker = getTailor(args.worker);
+        product = CONFIG.products[String(args.job || '')];
+        if (!worker) {
+            send(box('Tailor Repairs', '<div>Pick an existing tailor first.</div>' + btn('Main Menu', '!tailor-menu --pc|' + employer.id, CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110)));
+            return;
+        }
+        if (!product || !canRepairProduct(worker, String(args.job || ''))) {
+            send(box('Tailor Repairs',
+                line('Employer', esc(employer.get('name'))) + line('Tailor', esc(worker.name)) +
+                '<div>That item cannot be inspected by this tailor at the current skill level.</div>' +
+                btn('Repair Menu', '!tailor-repair-menu --pc|' + employer.id + ' --worker|' + worker.id, CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110)
+            ));
+            return;
+        }
+        inspection = {
+            id: generateInspectionId(),
+            workerId: worker.id,
+            workerName: worker.name,
+            employerId: employer.id,
+            description: 'Repair inspection: ' + product.label,
+            productKey: product.key,
+            elapsedDays: 0,
+            actualDays: 1,
+            status: 'active',
+            notes: 'Inspection underway.'
+        };
+        state[STATE].inspections.push(inspection);
+        send(box('Inspection Started',
+            line('Employer', esc(employer.get('name'))) +
+            line('Tailor', esc(worker.name)) +
+            line('Item', esc(product.label)) +
+            line('Inspection time', '1 day') +
+            '<div>No quote is available until the inspection day passes.</div>' +
+            btn('Apply Days', '!tailor-apply-days --pc|' + employer.id + ' --days|1', CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110) +
+            btn('Work Progress', '!tailor-report --pc|' + employer.id, CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110)
+        ));
+    }
+
+    function generateRepairQuoteFromInspection(employer, inspection) {
+        var worker = getTailor(inspection.workerId);
+        var product = CONFIG.products[String(inspection.productKey || '')];
+        var repairableRoll = rollInteger(1, 100);
+        var repairPct = rollInteger(CONFIG.repairCostMinPct, CONFIG.repairCostMaxPct);
+        var quote, actualRepairDays, notes;
+        if (!worker || !product) return null;
+        if (repairableRoll <= CONFIG.repairNotRepairablePct) {
+            inspection.status = 'complete';
+            inspection.notes = 'Not repairable.';
+            inspection.result = 'not-repairable';
+            inspection.repairableRoll = repairableRoll;
+            return {
+                type: 'not-repairable',
+                html: box('Repair Inspection Result',
+                    line('Tailor', esc(worker.name)) +
+                    line('Item', esc(product.label)) +
+                    line('Inspection roll', esc(repairableRoll)) +
+                    line('Beyond-repair threshold', esc(CONFIG.repairNotRepairablePct + '% not repairable')) +
+                    '<div>The tailor judges the item beyond repair after one day of inspection work.</div>' +
+                    btn('Main Menu', '!tailor-menu --pc|' + employer.id, CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110)
+                )
+            };
+        }
+        actualRepairDays = repairActualDays(product, worker.efficiency);
+        notes = 'Repair quote generated after 1 inspection day. Repair time is estimated as roughly one-quarter of full production time.';
+        quote = createQuote(employer, worker, {
+            description: 'Repair ' + product.label,
+            quantity: 1,
+            category: product.category,
+            support: product.support,
+            cloth: product.cloth,
+            days: actualRepairDays,
+            humanDays: actualRepairDays,
+            basePriceGp: (product.basePriceGp || 0) * (repairPct / 100),
+            extraCostGp: 0,
+            productKey: product.key,
+            notes: notes,
+            quoteType: 'repair',
+            skipRandomVariance: true
+        });
+        quote.repairPct = repairPct;
+        quote.repairableRoll = repairableRoll;
+        inspection.status = 'complete';
+        inspection.result = 'quoted';
+        inspection.generatedQuoteId = quote.id;
+        inspection.repairableRoll = repairableRoll;
+        return { type: 'quote', quote: quote, html: box('Repair Inspection Result', quoteSummaryHtml(quote, true)) };
+    }
+
+    function handleCounteroffer(msg, args) {
+        var employer = requireEmployer(msg, args);
+        var quote, roll, success, haggleTarget, newNegotiableCp, resultText;
+        if (!employer) return;
+        quote = getQuote(args.quote);
+        if (!quote || String(quote.employerId) !== String(employer.id)) {
+            send(box('Haggle Price', '<div>Quote not found.</div>' + btn('Main Menu', '!tailor-menu --pc|' + employer.id, CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110)));
+            return;
+        }
+        if (quote.haggleDone) {
+            send(box('Haggle Price', line('Job', esc(quote.description)) + '<div>Haggling is already finished for this quote.</div>' + btn('View Quotes', '!tailor-quotes --pc|' + employer.id, CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110)));
+            return;
+        }
+        roll = rollInteger(1, 100);
+        haggleTarget = Math.max(0, Math.min(95, 10 + toNumber(quote.reactionBonus, 0)));
+        success = roll <= haggleTarget;
+        quote.haggleAttempts = (quote.haggleAttempts || 0) + 1;
+        if (success) {
+            newNegotiableCp = Math.max(quote.floorNegotiableCp, Math.round(quote.currentNegotiableCp * 0.95));
+            quote.currentNegotiableCp = newNegotiableCp;
+            quote.currentQuoteCp = quote.fixedCostCp + newNegotiableCp;
+            quote.depositCp = Math.ceil(quote.currentQuoteCp / 2);
+            quote.balanceDueCp = quote.currentQuoteCp - quote.depositCp;
+            quote.haggleDone = true;
+            resultText = '<span style="color:#8fe38f;font-weight:bold;">Success - tailor reduces the quoted craft charge by 5%.</span>';
+        } else {
+            quote.haggleFailures = (quote.haggleFailures || 0) + 1;
+            quote.lastHaggleComment = CONFIG.haggleFailComments[rollInteger(0, CONFIG.haggleFailComments.length - 1)];
+            if (quote.haggleFailures >= 2) {
+                quote.currentNegotiableCp = Math.round(quote.currentNegotiableCp * 1.10);
+                quote.currentQuoteCp = quote.fixedCostCp + quote.currentNegotiableCp;
+                quote.depositCp = Math.ceil(quote.currentQuoteCp / 2);
+                quote.balanceDueCp = quote.currentQuoteCp - quote.depositCp;
+                quote.haggleDone = true;
+                resultText = '<span style="color:#ff7b7b;font-weight:bold;">Second failure - tailor raises the craft charge by 10% and ends haggling.</span>';
+            } else {
+                resultText = '<span style="color:#ffb36b;font-weight:bold;">Failure - no change yet. One more haggle attempt remains.</span>';
+            }
+        }
+        send(box('Haggle Result',
+            line('Job', esc(quote.description)) +
+            line('Haggle target', esc(haggleTarget + '%')) +
+            line('Die roll', esc(roll)) +
+            line('Result', resultText) +
+            ((!success && quote.lastHaggleComment) ? line('Tailor says', esc(quote.lastHaggleComment)) : '') +
+            line('Current quote', '<span style="color:#ffd25e;font-weight:bold;">' + esc(formatCp(quote.currentQuoteCp)) + '</span>') +
+            line('Half down now', esc(formatCp(quote.depositCp))) +
+            line('Balance on pickup', esc(formatCp(quote.balanceDueCp))) +
+            '<div style="margin-top:8px;">' +
+                btn('Place Order', '!tailor-accept-quote --pc|' + employer.id + ' --quote|' + quote.id, CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110) +
+                (!quote.haggleDone ? btn('Haggle Price', '!tailor-counteroffer --pc|' + employer.id + ' --quote|' + quote.id, CONFIG.colors.warnBg, CONFIG.colors.warnBorder, 110) : '') +
+                btn('Deny Quote', '!tailor-deny-quote --pc|' + employer.id + ' --quote|' + quote.id, CONFIG.colors.dangerBg, CONFIG.colors.dangerBorder, 110) +
+                btn('View Quotes', '!tailor-quotes --pc|' + employer.id, CONFIG.colors.warnBg, CONFIG.colors.warnBorder, 110) +
+                btn('Main Menu', '!tailor-menu --pc|' + employer.id, CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110) +
+            '</div>'
+        ));
+    }
+
+    function handleAcceptQuote(msg, args) {
+        var employer = requireEmployer(msg, args);
+        var quote, payResult, job, depositCp, balanceCp;
+        if (!employer) return;
+        quote = getQuote(args.quote);
+        if (!quote || String(quote.employerId) !== String(employer.id)) {
+            send(box('Place Order', '<div>Quote not found.</div>' + btn('Main Menu', '!tailor-menu --pc|' + employer.id, CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110)));
+            return;
+        }
+        depositCp = quote.depositCp || Math.ceil(quote.currentQuoteCp / 2);
+        balanceCp = typeof quote.balanceDueCp === 'number' ? quote.balanceDueCp : (quote.currentQuoteCp - depositCp);
+        payResult = payCostOrReport(employer, depositCp);
+        if (!payResult.ok) {
+            send(box('Place Order',
+                line('Employer', esc(employer.get('name'))) +
+                line('Needed now', esc(formatCp(payResult.needed))) +
+                line('On hand', esc(formatCp(payResult.onHand))) +
+                '<div>Not enough coin on the PC sheet for the half-down payment.</div>' +
+                btn('View Quotes', '!tailor-quotes --pc|' + employer.id, CONFIG.colors.warnBg, CONFIG.colors.warnBorder, 110)
+            ));
+            return;
+        }
+        job = {
+            id: generateJobId(),
+            workerId: quote.workerId,
+            workerName: quote.workerName,
+            employerId: employer.id,
+            description: quote.description,
+            actualDays: quote.actualDays,
+            elapsedDays: 0,
+            status: 'active',
+            finalCostCp: quote.currentQuoteCp,
+            upfrontPaidCp: depositCp,
+            balanceDueCp: balanceCp,
+            support: quote.support || [],
+            notes: 'Order placed. Half down paid: ' + formatCp(depositCp) + '. Haggle attempts: ' + (quote.haggleAttempts || 0) + '.',
+            quoteType: quote.quoteType || 'standard'
+        };
+        state[STATE].jobs.push(job);
+        removeQuote(quote.id);
+        send(box('Order Placed',
+            line('Employer', esc(employer.get('name'))) +
+            line('Job', esc(job.description)) +
+            line('Tailor', esc(job.workerName)) +
+            line('Half down paid', esc(formatCp(job.upfrontPaidCp))) +
+            line('Balance due on pickup', esc(formatCp(job.balanceDueCp))) +
+            line('Time to complete', esc(job.actualDays + ' day(s)')) +
+            btn('Work Progress', '!tailor-report --pc|' + employer.id, CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110) +
+            btn('Main Menu', '!tailor-menu --pc|' + employer.id, CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110)
+        ));
+    }
+
+    function handleDenyQuote(msg, args) {
+        var employer = requireEmployer(msg, args);
+        var quote;
+        if (!employer) return;
+        quote = getQuote(args.quote);
+        if (!quote || String(quote.employerId) !== String(employer.id)) {
+            send(box('Deny Quote', '<div>Quote not found.</div>' + btn('Main Menu', '!tailor-menu --pc|' + employer.id, CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110)));
+            return;
+        }
+        removeQuote(quote.id);
+        send(box('Quote Denied',
+            line('Employer', esc(employer.get('name'))) +
+            line('Tailor', esc(quote.workerName)) +
+            line('Job', esc(quote.description)) +
+            '<div>The quote was removed.</div>' +
+            btn('View Quotes', '!tailor-quotes --pc|' + employer.id, CONFIG.colors.warnBg, CONFIG.colors.warnBorder, 110) +
+            btn('Main Menu', '!tailor-menu --pc|' + employer.id, CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110)
+        ));
+    }
+
+    function handleQuotes(msg, args) {
+        var employer = requireEmployer(msg, args);
+        var quotes, body;
+        if (!employer) return;
+        quotes = getEmployerQuotes(employer.id);
+        if (!quotes.length) {
+            send(box('Open Quotes', line('Employer', esc(employer.get('name'))) + '<div>No open quotes.</div>' + btn('Main Menu', '!tailor-menu --pc|' + employer.id, CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110)));
+            return;
+        }
+        body = _.map(quotes, function (quote) {
+            return '<div style="margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid #2e2e2e;">' + quoteSummaryHtml(quote, true) + '</div>';
+        }).join('');
+        send(box('Open Quotes', line('Employer', esc(employer.get('name'))) + body + btn('Main Menu', '!tailor-menu --pc|' + employer.id, CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110)));
+    }
+
+    function inspectionSummary(inspection) {
+        return '<div style="margin:4px 0 8px 0;padding-bottom:6px;border-bottom:1px solid #2e2e2e;">' +
+            line('Inspection', esc(inspection.description)) +
+            line('Tailor', esc(inspection.workerName)) +
+            line('Progress', esc(inspection.elapsedDays + ' / ' + inspection.actualDays + ' day(s)')) +
+            line('Status', esc(inspection.status)) +
+            (inspection.notes ? '<div style="color:' + CONFIG.colors.subtext + ';">' + esc(inspection.notes) + '</div>' : '') +
+            '</div>';
+    }
+
+    function jobSummary(job, showPickup) {
+        var body = '<div style="margin:4px 0 8px 0;padding-bottom:6px;border-bottom:1px solid #2e2e2e;">' +
+            line('Job', esc(job.description)) +
+            line('Tailor', esc(job.workerName)) +
+            line('Progress', esc(job.elapsedDays + ' / ' + job.actualDays + ' day(s)')) +
+            line('Status', esc(job.status)) +
+            line('Paid now', esc(formatCp(job.upfrontPaidCp || 0))) +
+            line('Balance due', esc(formatCp(job.balanceDueCp || 0))) +
+            (job.notes ? '<div style="color:' + CONFIG.colors.subtext + ';">' + esc(job.notes) + '</div>' : '');
+        if (showPickup && job.status === 'ready') {
+            body += btn('Pick Up Order', '!tailor-pickup --pc|' + job.employerId + ' --job|' + job.id, CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110);
+        }
+        body += '</div>';
+        return body;
+    }
+
+    function handleReport(msg, args) {
+        var employer = requireEmployer(msg, args);
+        var inspections, jobs, body = '';
+        if (!employer) return;
+        inspections = getEmployerInspections(employer.id);
+        jobs = getEmployerJobs(employer.id);
+        body += line('Employer', esc(employer.get('name')));
+        body += sectionHeader('Open inspections');
+        body += inspections.length ? _.map(inspections, inspectionSummary).join('') : '<div>No active inspections.</div>';
+        body += sectionHeader('Open jobs');
+        body += jobs.length ? _.map(jobs, function (job) { return jobSummary(job, true); }).join('') : '<div>No active or ready jobs.</div>';
+        body += btn('Apply Days', '!tailor-apply-days --pc|' + employer.id + ' --days|?{Days passed|1}', CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110) +
+            btn('View Quotes', '!tailor-quotes --pc|' + employer.id, CONFIG.colors.warnBg, CONFIG.colors.warnBorder, 110) +
+            btn('Main Menu', '!tailor-menu --pc|' + employer.id, CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110);
+        send(box('Tailor Shop Work Progress', body));
+    }
+
+    function handleApplyDays(msg, args) {
+        var employer = requireEmployer(msg, args);
+        var days = Math.max(1, parseInt(args.days || 1, 10));
+        var inspections, jobs, notices = [];
+        if (!employer) return;
+        inspections = _.filter(getEmployerInspections(employer.id), function (i) { return i.status === 'active'; });
+        jobs = _.filter(getEmployerJobs(employer.id), function (j) { return j.status === 'active'; });
+
+        _.each(inspections, function (inspection) {
+            inspection.elapsedDays += days;
+            if (inspection.elapsedDays >= inspection.actualDays) {
+                var result = generateRepairQuoteFromInspection(employer, inspection);
+                if (result && result.html) notices.push(result.html);
+            }
+        });
+
+        _.each(jobs, function (job) {
+            job.elapsedDays += days;
+            if (job.elapsedDays >= job.actualDays) {
+                job.elapsedDays = job.actualDays;
+                job.status = 'ready';
+                notices.push(box('Order Ready',
+                    line('Employer', esc(employer.get('name'))) +
+                    line('Job', esc(job.description)) +
+                    line('Tailor', esc(job.workerName)) +
+                    line('Balance due', esc(formatCp(job.balanceDueCp || 0))) +
+                    btn('Pick Up Order', '!tailor-pickup --pc|' + employer.id + ' --job|' + job.id, CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110) +
+                    btn('Work Progress', '!tailor-report --pc|' + employer.id, CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110)
+                ));
+            }
+        });
+
+        state[STATE].inspections = _.reject(state[STATE].inspections, function (inspection) {
+            return String(inspection.employerId) === String(employer.id) && inspection.status === 'complete';
+        });
+
+        if (!notices.length) {
+            send(box('Apply Days',
+                line('Employer', esc(employer.get('name'))) +
+                line('Days applied', esc(days)) +
+                '<div>No inspections finished and no jobs became ready.</div>' +
+                btn('Work Progress', '!tailor-report --pc|' + employer.id, CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110) +
+                btn('Main Menu', '!tailor-menu --pc|' + employer.id, CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110)
+            ));
+            return;
+        }
+        send(notices.join(''));
+    }
+
+    function handlePickup(msg, args) {
+        var employer = requireEmployer(msg, args);
+        var job, payResult;
+        if (!employer) return;
+        job = getJob(args.job);
+        if (!job || String(job.employerId) !== String(employer.id)) {
+            send(box('Pick Up Order', '<div>Job not found.</div>' + btn('Work Progress', '!tailor-report --pc|' + employer.id, CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110)));
+            return;
+        }
+        if (job.status !== 'ready') {
+            send(box('Pick Up Order', '<div>That order is not ready for pickup yet.</div>' + btn('Work Progress', '!tailor-report --pc|' + employer.id, CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110)));
+            return;
+        }
+        payResult = payCostOrReport(employer, job.balanceDueCp || 0);
+        if (!payResult.ok) {
+            send(box('Pick Up Order',
+                line('Employer', esc(employer.get('name'))) +
+                line('Needed now', esc(formatCp(payResult.needed))) +
+                line('On hand', esc(formatCp(payResult.onHand))) +
+                '<div>Not enough coin on the PC sheet for pickup.</div>' +
+                btn('Work Progress', '!tailor-report --pc|' + employer.id, CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110)
+            ));
+            return;
+        }
+        job.status = 'complete';
+        send(box('Order Picked Up',
+            line('Employer', esc(employer.get('name'))) +
+            line('Job', esc(job.description)) +
+            line('Tailor', esc(job.workerName)) +
+            line('Balance paid', esc(formatCp(job.balanceDueCp || 0))) +
+            '<div>The order has been completed and removed from the active queue.</div>' +
+            btn('Work Progress', '!tailor-report --pc|' + employer.id, CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110) +
+            btn('Main Menu', '!tailor-menu --pc|' + employer.id, CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110)
+        ));
+        state[STATE].jobs = _.reject(state[STATE].jobs, function (j) { return String(j.id) === String(job.id); });
+    }
+
+    function handleRemoveWorkerMenu(msg, args) {
+        var employer = requireEmployer(msg, args);
+        if (!employer) return;
+        if (!getAllTailors().length) {
+            send(box('Remove Tailor', '<div>No tailors are recorded in the campaign yet.</div>' + btn('Main Menu', '!tailor-menu --pc|' + employer.id, CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110)));
+            return;
+        }
+        send(box('Remove Tailor',
+            '<div>Choose the tailor to remove from the campaign pool.</div>' +
+            buildWorkerButtons(employer, '!tailor-remove-worker', CONFIG.colors.dangerBg, CONFIG.colors.dangerBorder) +
+            '<div style="margin-top:8px;">' + btn('Main Menu', '!tailor-menu --pc|' + employer.id, CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110) + '</div>'
+        ));
+    }
+
+    function handleRemoveWorker(msg, args) {
+        var employer = requireEmployer(msg, args);
+        var worker;
+        if (!employer) return;
+        worker = getTailor(args.worker);
+        if (!worker) {
+            send(box('Remove Tailor', '<div>Tailor not found.</div>' + btn('Main Menu', '!tailor-menu --pc|' + employer.id, CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110)));
+            return;
+        }
+        state[STATE].tailors = _.reject(state[STATE].tailors, function (w) { return String(w.id) === String(worker.id); });
+        state[STATE].quotes = _.reject(state[STATE].quotes, function (q) { return String(q.workerId) === String(worker.id); });
+        state[STATE].jobs = _.reject(state[STATE].jobs, function (j) { return String(j.workerId) === String(worker.id); });
+        state[STATE].inspections = _.reject(state[STATE].inspections, function (i) { return String(i.workerId) === String(worker.id); });
+        send(box('Tailor Removed',
+            line('Employer', esc(employer.get('name'))) +
+            line('Tailor', esc(worker.name)) +
+            '<div>The tailor and any open quotes, jobs, or inspections tied to that worker were removed.</div>' +
+            btn('Main Menu', '!tailor-menu --pc|' + employer.id, CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110)
+        ));
+    }
+
+    function handleRemoveAll(msg, args) {
+        var employer = requireEmployer(msg, args);
+        if (!employer) return;
+        if (!isAffirmative(args.confirm)) {
+            send(box('Remove All Tailors', '<div>Removal cancelled.</div>' + btn('Main Menu', '!tailor-menu --pc|' + employer.id, CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110)));
+            return;
+        }
+        state[STATE].tailors = [];
+        state[STATE].quotes = [];
+        state[STATE].jobs = [];
+        state[STATE].inspections = [];
+        send(box('Remove All Tailors',
+            line('Employer', esc(employer.get('name'))) +
+            '<div>All tailors and all open tailor-shop quotes, jobs, and inspections were removed.</div>' +
+            btn('Main Menu', '!tailor-menu --pc|' + employer.id, CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110)
+        ));
+    }
+
+    function handleReset(msg, args) {
+        if (!playerIsGM(msg.playerid)) {
+            send(box('Reset Campaign', '<div>Only the GM can reset the cloth shop script.</div>'));
+            return;
+        }
+        if (!isAffirmative(args.confirm)) {
+            send(box('Reset Campaign', '<div>Reset cancelled.</div>' + btn('Main Menu', '!tailor-menu', CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110)));
+            return;
+        }
+        state[STATE] = {
+            version: VERSION,
+            nextTailorId: 1,
+            nextQuoteId: 1,
+            nextJobId: 1,
+            nextInspectionId: 1,
+            tailors: [],
+            quotes: [],
+            jobs: [],
+            inspections: []
+        };
+        send(box('Reset Campaign', '<div>All Tailor Shop campaign data has been reset.</div>' + btn('Main Menu', '!tailor-menu', CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110)));
+    }
+
+    function handleInput(msg) {
+        var args, cmd;
+        if (msg.type !== 'api') return;
+        if (!msg.content || msg.content.indexOf('!tailor-') !== 0) return;
+        setWhisperTarget(msg);
+        args = parseArgs(msg.content);
+        cmd = msg.content.split(' ')[0];
+
+        switch (cmd) {
+        case '!tailor-menu': handleMenu(msg, args); break;
+        case '!tailor-add-worker': handleAddWorker(msg, args); break;
+        case '!tailor-quote-start': handleQuoteStart(msg, args); break;
+        case '!tailor-repair-start': handleRepairStart(msg, args); break;
+        case '!tailor-custom-start': handleCustomStart(msg, args); break;
+        case '!tailor-price-list': handlePriceList(msg, args); break;
+        case '!tailor-quote-menu': handleQuoteMenu(msg, args); break;
+        case '!tailor-custom-menu': handleCustomMenu(msg, args); break;
+        case '!tailor-repair-menu': handleRepairMenu(msg, args); break;
+        case '!tailor-quote-standard': handleQuoteStandard(msg, args); break;
+        case '!tailor-custom-quote': handleCustomQuote(msg, args); break;
+        case '!tailor-repair-inspect': handleRepairInspect(msg, args); break;
+        case '!tailor-counteroffer': handleCounteroffer(msg, args); break;
+        case '!tailor-accept-quote': handleAcceptQuote(msg, args); break;
+        case '!tailor-deny-quote': handleDenyQuote(msg, args); break;
+        case '!tailor-quotes': handleQuotes(msg, args); break;
+        case '!tailor-report': handleReport(msg, args); break;
+        case '!tailor-apply-days': handleApplyDays(msg, args); break;
+        case '!tailor-pickup': handlePickup(msg, args); break;
+        case '!tailor-remove-worker-menu': handleRemoveWorkerMenu(msg, args); break;
+        case '!tailor-remove-worker': handleRemoveWorker(msg, args); break;
+        case '!tailor-remove-all': handleRemoveAll(msg, args); break;
+        case '!tailor-reset': handleReset(msg, args); break;
+        default: handleUnknown(msg, cmd, args); break;
+        }
+    }
+
+    function handleUnknown(msg, cmd, args) {
+        var employer = resolveEmployer(msg, args);
+        send(box('Tailor Shop',
+            line('Command', esc(cmd || 'unknown')) +
+            '<div>That tailor-shop button or command did not match a valid handler.</div>' +
+            btn('Main Menu', employer ? '!tailor-menu --pc|' + employer.id : '!tailor-menu', CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110)
+        ));
+    }
+
+    return {
+        CheckInstall: stateInit,
+        RegisterEventHandlers: registerEventHandlers
+    };
+}());
+
+on('ready', function () {
+    'use strict';
+    TailorShop.CheckInstall();
+    TailorShop.RegisterEventHandlers();
+});
+
