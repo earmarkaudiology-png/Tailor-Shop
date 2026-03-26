@@ -1,4 +1,3 @@
-command is !tailor-menu
 var TailorShop = TailorShop || (function () {
     'use strict';
 
