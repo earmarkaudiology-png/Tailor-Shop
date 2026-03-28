@@ -146,12 +146,14 @@ var TailorShop = TailorShop || (function () {
     }
 
     function setWhisperTarget(msg) {
-        currentWhisperTarget = sanitizeWhisperName((msg && msg.who) || 'gm');
+        var player = getObjById('player', msg.playerid);
+        currentWhisperTarget = player
+            ? String(player.get('_displayname') || '').replace(/"/g, '')
+            : sanitizeWhisperName((msg && msg.who) || 'gm');
     }
 
     function send(html) {
-        var target = sanitizeWhisperName(currentWhisperTarget || 'gm');
-        sendChat('', '/w "' + target + '" ' + html);
+        sendChat(SCRIPT, '/direct ' + html);
     }
 
     function box(title, body) {
@@ -1383,5 +1385,6 @@ on('ready', function () {
     'use strict';
     TailorShop.CheckInstall();
     TailorShop.RegisterEventHandlers();
+    log('TailorShop v0.1.0 ready.');
 });
 
